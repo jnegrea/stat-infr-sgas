@@ -8,6 +8,7 @@ output_path = "../output/"
 isdir(output_path) || mkdir(output_path)
 
 source_data_file = "../source-data/data_airline_raw.rdata"
+
 ## experiment-3 Logistic REgression Experiments
 
 output_path_4 = output_path*"experiments-4-airline-data/"
@@ -40,11 +41,11 @@ keepperiods = Dict(
     :preconSGD => samplesize ÷ batchsizes[:preconSGD],
     :preconSGLD => samplesize ÷ batchsizes[:preconSGLD])
 
-layers = layerer([:halfsandwich, :sandwich])
-layers = layerer(layers, :vanillaSGD)
-layers = layerer(layers, :trueparm)
-layers = layerer(layers, :preconSGD; drop=:vanillaSGD)
-layers = layerer(layers, [:preconSGLD, :mixture, :jinv]; drops=[:preconSGD, :halfsandwich])
+# layers = layerer([:halfsandwich, :sandwich])
+# layers = layerer(layers, :vanillaSGD)
+# layers = layerer(layers, :trueparm)
+# layers = layerer(layers, :preconSGD; drop=:vanillaSGD)
+# layers = layerer(layers, [:preconSGLD, :mixture, :jinv]; drops=[:preconSGD, :halfsandwich])
 
 # airlineInit(samplesize, output_path_4_1*"model_init", source_data_file; trueparmfile=output_path_4*"airline-data-trueparm.jld2" , initparm=false, mc_size=false, mleparmtype=:glm)
 # modelRun(output_path_4_1*"model_init.jld2", output_path_4_1*"model_run",
@@ -53,6 +54,53 @@ layers = layerer(layers, [:preconSGLD, :mixture, :jinv]; drops=[:preconSGD, :hal
 #     layers, (-25,25), (-25,25), nameattr= false, levels=10, localscale=false)
 # modelSummary(output_path_4_1*"model_init.jld2", output_path_4_1*"model_run.jld2",
 #     output_path_4_1*experiment_name*"-summary.txt")
+
+## Functions for example 4.2
+function scatter_plot(x, y, xlabel, ylabel; xlims = nothing, post_fix1 = "", picname = "", logscale = false, prior = :flat)
+    if logscale
+        p = Plots.scatter(x, y, colour = [:blue],markersize = 12,
+            markershape = [:circle],markeralpha = 0.8,label = nothing, xtickfontsize=18, xlims = xlims,
+            ytickfontsize=18, xlabel = xlabel, ylabel = ylabel,labelfontsize = 18, yaxis = :log, xaxis = :log)
+    else
+        p = Plots.scatter(x, y, colour = [:blue],markersize = 12,
+            markershape = [:circle],markeralpha = 0.8,label = nothing, xtickfontsize=18, xlims = xlims,
+            ytickfontsize=18, xlabel = xlabel, ylabel = ylabel,labelfontsize = 18)
+    end
+    Plots.abline!(1, 0, line=:dash, subplot = 1,label = false)
+
+    if !isempty(picname)
+        if xlims!=nothing
+            picname *= "-xlim"
+        end
+        if logscale
+            picname*= "-logscale"
+        end
+        prior = string(prior)
+        savefig(p, picname*"-"*String(prior)*post_fix1*".pdf")
+    end
+    return p
+end
+
+function equation_9_precon(Qinf, Jinv, V, Precon; ch = 4, cb = 1, cbBar = 1)
+    B = ch.*Precon*inv(Jinv)
+    right = ch^(2)*cbBar/(4*cb) .* Precon * V * Precon'
+    left = 0.5.*(B*Qinf + Qinf'*B')#transpose(B))
+    return left, right
+end
+
+function equation_12_precon(covItAvg, Jinv, V, Qinf, samplesize, iteravg_numepochs, precon; ch = 4, cb = 1)
+    left = samplesize*iteravg_numepochs.* covItAvg
+    J = inv(Jinv)
+    sym1 = 0.5 .* (inv(precon*J) * Qinf + Qinf' * (inv(precon*J))')#* inv(J'*Precon'))
+
+    exp_expr = -1*ch*iteravg_numepochs.* precon*J./(2*cb)
+    expr = inv(precon*J)^2 * (Matrix{Float64}(I, size(Jinv)) - exp(exp_expr)) * Qinf
+    sym2 = 0.5 .* (expr + expr')#transpose(Jinv))
+    right = (4*cb/ch).*sym1 - (8*cb^2)/ch^2 /iteravg_numepochs .* sym2
+    println("The constants for the first term ", 4*cb/ch)
+    println("The constants for the second term ", (8*cb^(2))/ch^(2))
+    return left, right
+end
 
 
 ## Example 4.2: Medium Test Version of Airline Data
@@ -140,6 +188,8 @@ modelinitfile = output_path_4_2*"model_init.jld2"
 @load modelinitfile gradlogprior
 @load modelrunfile algos parms trueparm mleparm Jinv V sqrtJinv w samplesize batchsizes numstepss ismmap_init ismmap_run keepperiods
 # iteravg_numepochs = 16
+
+
 samplesize
 parms
 # num_iteravgs = 2000
@@ -185,6 +235,8 @@ evaluesThird = eigenThird.values
 print(evaluesThird)
 ylabel = Dict(:mean => "MLE", :cov => "Sandwich Estimator")
 xCovsLabels = Dict(:vanillaSGDPowHalfSumOne => "covariances of vanillaSGDPowHalfSumOne", :vanillaSGDPowThirdSumOne => "covariances of vanillaSGDPowThirdSumOne")
+
+
 for algo in algos
     scatter_plot(covsSandwich, covItAvgsToPlot[algo], ylabel[:cov], "predicted covariance"; xlims = nothing, post_fix1 = post_fix1, picname = output_path_4_2*"/"*"covs_"*string(algo)*"_iteravg_numepochs_"*string(iteravg_numepochs)*"_batchsize_"*string(batchsizes[algo])*"_samplesize_"*string(samplesize), prior = gradlogprior)
 end
@@ -198,27 +250,6 @@ B = ch.*precon*inv(Jinv)
 E = eigen(B)
 lambdaMin = findmin(E.values)
 1/lambdaMin[1]
-
-function equation_9_precon(Qinf, Jinv, V, Precon; ch = 4, cb = 1, cbBar = 1)
-    B = ch.*Precon*inv(Jinv)
-    right = ch^(2)*cbBar/(4*cb) .* Precon * V * Precon'
-    left = 0.5.*(B*Qinf + Qinf'*B')#transpose(B))
-    return left, right
-end
-
-function equation_12_precon(covItAvg, Jinv, V, Qinf, samplesize, iteravg_numepochs, precon; ch = 4, cb = 1)
-    left = samplesize*iteravg_numepochs.* covItAvg
-    J = inv(Jinv)
-    sym1 = 0.5 .* (inv(precon*J) * Qinf + Qinf' * (inv(precon*J))')#* inv(J'*Precon'))
-
-    exp_expr = -1*ch*iteravg_numepochs.* precon*J./(2*cb)
-    expr = inv(precon*J)^2 * (Matrix{Float64}(I, size(Jinv)) - exp(exp_expr)) * Qinf
-    sym2 = 0.5 .* (expr + expr')#transpose(Jinv))
-    right = (4*cb/ch).*sym1 - (8*cb^2)/ch^2 /iteravg_numepochs .* sym2
-    println("The constants for the first term ", 4*cb/ch)
-    println("The constants for the second term ", (8*cb^(2))/ch^(2))
-    return left, right
-end
 
 for algo in algos
     # SymQB, A = equation_9_precon(qInfs[algo], Jinv, V, precon)
