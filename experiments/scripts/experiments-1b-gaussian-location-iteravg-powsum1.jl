@@ -21,7 +21,7 @@ parmdim = 10
 Σlik = Matrix(Diagonal(ones(parmdim)))
 
 
-samplesize = 100
+samplesize = 1000
 
 
 iteravg_numepochs=8 # NEW
@@ -256,11 +256,11 @@ layers = layerer(layers, :vanillaSGDPowHalfSumOne, drop=:vanillaSGDPowTwoThirdSu
 layers = layerer(layers, :vanillaSGDPowThirdSumOne, drop=:vanillaSGDPowHalfSumOne)
 
 
-gaussianLocationInit(samplesize, parmdim, Σ, Σlik, output_path_1b_6*"model_init.jld2")
-modelRun(output_path_1b_6*"model_init.jld2", output_path_1b_6*"model_run.jld2",
-    algos, samplesize, batchsizes, w, numstepss; multithread=true)
-modelPlot(output_path_1b_6*"model_run.jld2", output_path_1b_6*experiment_name*"-fig",
-    layers, (-3,3), (-3,3), nameattr= false, iteravg_numepochs=iteravg_numepochs)
+# gaussianLocationInit(samplesize, parmdim, Σ, Σlik, output_path_1b_6*"model_init.jld2")
+# modelRun(output_path_1b_6*"model_init.jld2", output_path_1b_6*"model_run.jld2",
+#     algos, samplesize, batchsizes, w, numstepss; multithread=true)
+# modelPlot(output_path_1b_6*"model_run.jld2", output_path_1b_6*experiment_name*"-fig",
+#     layers, (-3,3), (-3,3), nameattr= false, iteravg_numepochs=iteravg_numepochs)
 
 
 ## Example 1.7: well-spec multivariate gaussian location with non-diagonal covariance for presentation
@@ -301,11 +301,11 @@ layers = layerer(layers, :vanillaSGDPowHalfSumOne, drop=:vanillaSGDPowTwoThirdSu
 layers = layerer(layers, :vanillaSGDPowThirdSumOne, drop=:vanillaSGDPowHalfSumOne)
 
 
-gaussianLocationInit(samplesize, parmdim, Σ, Σlik, output_path_1b_7*"model_init.jld2")
-modelRun(output_path_1b_7*"model_init.jld2", output_path_1b_7*"model_run.jld2",
-    algos, samplesize, batchsizes, w, numstepss; multithread=true)
-modelPlot(output_path_1b_7*"model_run.jld2", output_path_1b_7*experiment_name*"-fig",
-    layers, (-3,3), (-3,3), nameattr= false, iteravg_numepochs=iteravg_numepochs)
+# gaussianLocationInit(samplesize, parmdim, Σ, Σlik, output_path_1b_7*"model_init.jld2")
+# modelRun(output_path_1b_7*"model_init.jld2", output_path_1b_7*"model_run.jld2",
+#     algos, samplesize, batchsizes, w, numstepss; multithread=true)
+# modelPlot(output_path_1b_7*"model_run.jld2", output_path_1b_7*experiment_name*"-fig",
+#     layers, (-3,3), (-3,3), nameattr= false, iteravg_numepochs=iteravg_numepochs)
 
 ## Example 1.8: miss-spec multivariate gaussian location with wrong covariance
 experiment_name = "experiments-1b-8-gaussianLocation-missspec-withV"
@@ -343,8 +343,51 @@ layers = layerer(layers, :vanillaSGDPowHalfSumOne, drop=:vanillaSGDPowTwoThirdSu
 layers = layerer(layers, :vanillaSGDPowThirdSumOne, drop=:vanillaSGDPowHalfSumOne)
 
 
-gaussianLocationInit(samplesize, parmdim, Σ, Σlik, output_path_1b_8*"model_init.jld2")
-modelRun(output_path_1b_8*"model_init.jld2", output_path_1b_8*"model_run.jld2",
-    algos, samplesize, batchsizes, w, numstepss; multithread=true)
-modelPlot(output_path_1b_8*"model_run.jld2", output_path_1b_8*experiment_name*"-fig",
-    layers, (-3,3), (-3,3), nameattr= false, iteravg_numepochs=iteravg_numepochs)
+# gaussianLocationInit(samplesize, parmdim, Σ, Σlik, output_path_1b_8*"model_init.jld2")
+# modelRun(output_path_1b_8*"model_init.jld2", output_path_1b_8*"model_run.jld2",
+#     algos, samplesize, batchsizes, w, numstepss; multithread=true)
+# modelPlot(output_path_1b_8*"model_run.jld2", output_path_1b_8*experiment_name*"-fig",
+#     layers, (-3,3), (-3,3), nameattr= false, iteravg_numepochs=iteravg_numepochs)
+
+## Example 1.8: miss-spec multivariate gaussian location with wrong covariance for the paper
+experiment_name = "experiments-1b-9-gaussianLocation-missspec-withV-paper"
+output_path_1b_9 = output_path_1b*experiment_name*"/"
+isdir(output_path_1b_9) || mkdir(output_path_1b_9)
+
+parmdim = 10
+Σ = Diagonal(0.5*ones(parmdim)).+0.5
+Σlik = Matrix(Diagonal(sqrt.(1:parmdim)))
+
+
+
+samplesize = 1000
+
+iteravg_numepochs=8 # NEW
+num_iteravgs = 10000÷iteravg_numepochs
+numepochs = num_iteravgs*iteravg_numepochs
+
+w=1/2
+pows = [1,2/3,1/2,1/3] # Not actually used, just a reference for JN & HF
+# algos = [:vanillaSGDPowOneSumOne, :vanillaSGDPowTwoThirdSumOne, :vanillaSGDPowHalfSumOne, :vanillaSGDPowThirdSumOne]
+algos = [:vanillaSGDPowOneSumOne]
+batchsizes = Dict(
+    :vanillaSGDPowOneSumOne => 1*ceil(Int,samplesize^(1-1)),
+    # :vanillaSGDPowTwoThirdSumOne => 1*ceil(Int,samplesize^(1-2/3)),
+    # :vanillaSGDPowHalfSumOne => 1*ceil(Int,samplesize^(1-1/2)),
+    # :vanillaSGDPowThirdSumOne => 1*ceil(Int,samplesize^(1-1/3))
+)
+numstepss = Dict(
+    algo => numepochs*samplesize ÷ batchsizes[algo] for algo in algos
+)
+
+layers = layerer([:sandwichScaled, :vanillaSGDPowOneSumOne, :iteravg, :nogrid])
+# layers = layerer(layers, :vanillaSGDPowTwoThirdSumOne, drop=:vanillaSGDPowOneSumOne)
+# layers = layerer(layers, :vanillaSGDPowHalfSumOne, drop=:vanillaSGDPowTwoThirdSumOne)
+# layers = layerer(layers, :vanillaSGDPowThirdSumOne, drop=:vanillaSGDPowHalfSumOne)
+
+
+# gaussianLocationInit(samplesize, parmdim, Σ, Σlik, output_path_1b_9*"model_init.jld2")
+# modelRun(output_path_1b_9*"model_init.jld2", output_path_1b_9*"model_run.jld2",
+#     algos, samplesize, batchsizes, w, numstepss; multithread=true)
+modelPlot(output_path_1b_9*"model_run.jld2", output_path_1b_9*experiment_name*"-fig",
+    layers, (-3,3), (-3,3), nameattr= false, iteravg_numepochs=iteravg_numepochs, levels = 5, fontscale=2.2)

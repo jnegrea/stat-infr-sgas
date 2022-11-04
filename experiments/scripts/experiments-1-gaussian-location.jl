@@ -409,6 +409,6 @@ layers = layerer(layers, [:mixture,:preconSGLD], drop=[:jinv,:preconVSGD])
 # modelRun(output_path_1_8*"model_init.jld2", output_path_1_8*"model_run.jld2",
 #     algos, samplesize, batchsizes, w, numstepss; multithread=true)
 modelPlot(output_path_1_8*"model_run.jld2", output_path_1_8*experiment_name*"-fig", 
-    layers, (-3,3), (-3,3), nameattr= false, levels = 5, fontscale=2.2, legendloc=:outertop)
+    layers, (-3,3), (-3,3), nameattr= false, levels = 5, fontscale=2.2)
 # modelSummary(output_path_1_8*"model_init.jld2", output_path_1_8*"model_run.jld2", 
     # output_path_1_8*experiment_name*"-summary.txt")

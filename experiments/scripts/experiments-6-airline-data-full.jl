@@ -74,14 +74,16 @@ layers = layerer([:preconVSGD, :jinv, :trueparm, :univariate, :histogram, :allpa
 layers = layerer(layers, [:preconSGD, :sandwich], drop=[:preconVSGD, :jinv])
 layers = layerer(layers, [:preconSGLD, :mixture], drop=[:preconSGD, :sandwich])
 # layers = layerer(layers, [:preconSGLD], drop=[:preconVSGD])
-modelPlot(output_path_6_1*"model_run.jld2", output_path_6_1*"/univariate-all/"*experiment_name*"-univ-fig-fontscaled", 
-    layers, (-60,60), (-60,60), nameattr= false, levels=5, localscale=false, fontscale=2)
+# modelPlot(output_path_6_1*"model_run.jld2", output_path_6_1*"/univariate-all/"*experiment_name*"-univ-fig-fontscaled", 
+#     layers, (-60,60), (-60,60), nameattr= false, levels=5, localscale=false, fontscale=2)
     
 # modelSummary(output_path_6*"airline-data-full-init.jld2", output_path_6_1*"model_run.jld2", 
 #     output_path_6_1*experiment_name*"-summary.txt")
 # 
 
-# output_path_6_1_1= output_path_6_1*"/univariate-all/"
+output_path_6_1_1= output_path_6_1*"/univariate-all/"
+isdir(output_path_6_1_1) || mkdir(output_path_6_1_1)
+
 # layers = layerer([:preconSGLD, :mixture, :allparms, :univariate, :histogram, :nolegend])
 # layers = layerer(layers, [:preconSGD, :sandwich])
 # # layers = layerer(layers, :trueparm)
@@ -94,8 +96,8 @@ layers = layerer(layers, [:preconSGD, :sandwich])
 # layers = layerer(layers, :trueparm)
 # layers = layerer(layers, [:preconSGLD, :mixture])
 layers = layerer(layers, [:preconVSGD, :jinv])
-modelPlot(output_path_6_1*"model_run.jld2", output_path_6_1*"/univariate-all-nolegend/"*experiment_name*"-univ-fig-fontscaled", 
-    layers, (-60,60), (-60,60), nameattr= false, levels=5, localscale=false, fontscale=2)
+# modelPlot(output_path_6_1*"model_run.jld2", output_path_6_1*"/univariate-all-nolegend/"*experiment_name*"-univ-fig-fontscaled", 
+    # layers, (-60,60), (-60,60), nameattr= false, levels=5, localscale=false, fontscale=2)
     
 
 # modelPlot(output_path_6_1*"model_run.jld2", output_path_6_1_1*"yourmodeliswrong/"*experiment_name*"-nolegend-fig", 
@@ -110,7 +112,19 @@ layers = layerer(layers, [:preconSGD])
 # layers = layerer(layers, [:preconSGLD, :mixture])
 layers = layerer(layers, [:preconVSGD])
 
-# modelPlot(output_path_6_1*"model_run.jld2", output_path_6_1_1*"yourmodeliswrong/"*experiment_name*"-nolegend-fig", 
-#     layers, (-60,60), (-60,60), nameattr= false, levels = 6, localscale=false)    
+modelPlot(output_path_6_1*"model_run.jld2", output_path_6_1_1*experiment_name*"-nolegend-fig", 
+    layers, (-60,60), (-60,60), nameattr= false, levels = 6, localscale=false, fontscale=2)    
+# modelSummary(output_path_6*"airline-data-full-init.jld2", output_path_6_1*"model_run.jld2", 
+#     output_path_6_1_1*"yourmodeliswrong/"*experiment_name*"-summary.txt")    
+
+layers = layerer([:jinv, :sandwich, :allparms, :univariate, :histogram])
+layers = layerer(layers, [:preconSGLD, :mixture])
+layers = layerer(layers, [:preconSGD])
+# layers = layerer(layers, :trueparm)
+# layers = layerer(layers, [:preconSGLD, :mixture])
+layers = layerer(layers, [:preconVSGD])
+
+modelPlot(output_path_6_1*"model_run.jld2", output_path_6_1_1*experiment_name*"-fig", 
+    layers, (-60,60), (-60,60), nameattr= false, levels = 6, localscale=false, fontscale=2)    
 # modelSummary(output_path_6*"airline-data-full-init.jld2", output_path_6_1*"model_run.jld2", 
 #     output_path_6_1_1*"yourmodeliswrong/"*experiment_name*"-summary.txt")    

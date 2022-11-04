@@ -133,6 +133,7 @@ end
 ## Plotting an SGLD run's density estimator
 function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrtJinv, V, w, layers, xlimvals, ylimvals, ismmap_run, numstepss, batchsizes, keepperiods; nameattr= false, levels=10, localscale=true, fontscale=1, legendloc=:topleft, iteravg_numepochs=1)
     parmdim = length(trueparm)
+    print("parmdim = "*string(parmdim))
     numlayers = layers.numlayers
     figs = Dict{typeof(numlayers),typeof(plot())}()
     if localscale
@@ -172,36 +173,43 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
     Y = range(biv_ylimvals...,length=201)
 
     # Bivariate
-    safe_halfsandwich = sqrt((sqrtJinv'*V*sqrtJinv)*(sqrtJinv'*V*sqrtJinv)')*scalematrix^2
+    safe_halfsandwich = (sqrtJinv'*V*sqrtJinv)
+    safe_halfsandwich = (safe_halfsandwich +safe_halfsandwich')/2
+    safe_halfsandwich = sqrt(safe_halfsandwich*safe_halfsandwich')*scalematrix^2
     f_halfsandwich(x,y) = pdf(MvNormal(local_mleparm[[1,parmdim]], Array(safe_halfsandwich[[1,parmdim],[1,parmdim]])), [x,y])
     Z_halfsandwich = [f_halfsandwich(x,y) for y in Y, x in X ]
 
-    safe_sandwich = sqrt((Jinv'*V*Jinv)*(Jinv'*V*Jinv)')*scalematrix^2
+    safe_sandwich = Jinv'*V*Jinv
+    safe_sandwich = (safe_sandwich+safe_sandwich')/2
+    safe_sandwich = sqrt(safe_sandwich*safe_sandwich')*scalematrix^2
     f_sandwich(x,y) = pdf(MvNormal(local_mleparm[[1,parmdim]], Array(safe_sandwich[[1,parmdim],[1,parmdim]])), [x,y])
     Z_sandwich = [f_sandwich(x,y) for y in Y, x in X ]
 
-    safe_Jinv = sqrt((Jinv)*(Jinv)')*scalematrix^2
+    safe_Jinv = Jinv
+    safe_Jinv = (safe_Jinv+safe_Jinv')/2
+    safe_Jinv = sqrt((safe_Jinv)*(safe_Jinv)')*scalematrix^2
     f_Jinv(x,y) = pdf(MvNormal(local_mleparm[[1,parmdim]], Array((safe_Jinv)[[1,parmdim],[1,parmdim]])), [x,y])
     Z_Jinv = [f_Jinv(x,y) for y in Y, x in X ]
 
     safe_mixture = (w*safe_Jinv + (1-w)*safe_sandwich)
+    safe_mixture = (safe_mixture + safe_mixture')/2
     f_mixture(x,y) = pdf(MvNormal(local_mleparm[[1,parmdim]], Array(safe_mixture[[1,parmdim],[1,parmdim]])), [x,y])
     Z_mixture = [f_mixture(x,y) for y in Y, x in X ]
 
     ### Scaled Bivariate
-    safe_halfsandwich_scaled = sqrt((sqrtJinv'*V*sqrtJinv)*(sqrtJinv'*V*sqrtJinv)')*scalematrix^2 / iteravg_numepochs
+    safe_halfsandwich_scaled = safe_halfsandwich / iteravg_numepochs
     f_halfsandwich_scaled(x,y) = pdf(MvNormal(local_mleparm[[1,parmdim]], Array(safe_halfsandwich_scaled[[1,parmdim],[1,parmdim]])), [x,y])
     Z_halfsandwich_scaled = [f_halfsandwich_scaled(x,y) for y in Y, x in X ]
 
-    safe_sandwich_scaled = sqrt((Jinv'*V*Jinv)*(Jinv'*V*Jinv)')*scalematrix^2 / iteravg_numepochs
+    safe_sandwich_scaled = safe_sandwich/ iteravg_numepochs
     f_sandwich_scaled(x,y) = pdf(MvNormal(local_mleparm[[1,parmdim]], Array(safe_sandwich_scaled[[1,parmdim],[1,parmdim]])), [x,y])
     Z_sandwich_scaled = [f_sandwich_scaled(x,y) for y in Y, x in X ]
 
-    safe_Jinv_scaled = sqrt((Jinv)*(Jinv)')*scalematrix^2 / iteravg_numepochs
+    safe_Jinv_scaled = safe_Jinv / iteravg_numepochs
     f_Jinv_scaled(x,y) = pdf(MvNormal(local_mleparm[[1,parmdim]], Array((safe_Jinv_scaled)[[1,parmdim],[1,parmdim]])), [x,y])
     Z_Jinv_scaled = [f_Jinv(x,y) for y in Y, x in X ]
 
-    safe_mixture_scaled = (w*safe_Jinv + (1-w)*safe_sandwich) / iteravg_numepochs
+    safe_mixture_scaled = safe_mixture / iteravg_numepochs
     f_mixture_scaled(x,y) = pdf(MvNormal(local_mleparm[[1,parmdim]], Array(safe_mixture_scaled[[1,parmdim],[1,parmdim]])), [x,y])
     Z_mixture_scaled = [f_mixture(x,y) for y in Y, x in X ]
 
@@ -225,26 +233,29 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
     epochlengths = Dict(algo => samplesize ÷ batchsizes[algo] ÷ keepperiods[algo] for algo in algos)
     numepochs = Dict(algo => numstepss[algo]*batchsizes[algo] ÷ samplesize for algo in algos)
 
-    iteravg_lengths = Dict(algo => epochlengths[algo]*iteravg_numepochs for algo in algos)
-    numiteravgs = Dict(algo => numstepss[algo] ÷ iteravg_lengths[algo] for algo in algos)
-    # iteravgranges = Dict(algo => [((2*i-1)*(numstepss[algo]÷ keepperiods[algo]÷100)+1):(min((2*i)*(numstepss[algo]÷ keepperiods[algo]÷100), (2*i-1)*(numstepss[algo]÷ keepperiods[algo]÷100)+1*epochlengths[algo])) for i in 1:50] for algo in algos)
-    iteravgranges = Dict(algo => [((i-1)*iteravg_lengths[algo]+1):(i*iteravg_lengths[algo]) for i in 1:numiteravgs[algo]] for algo in algos)
-    # print(iteravgranges)
-
-    iteravgs = Dict(algo => [sum(local_parm[range])/length(range) for range in iteravgranges[algo]] for (algo,local_parm) in local_parms)
-    # print(iteravgs)
-
-    dens2d_avg = Dict(algo => kde2d_gen(iteravg) for (algo,iteravg) in iteravgs)
-    Z_kde2d_avg = Dict(algo => [pdf(dens2d_avg[algo],x,y) for y in Y, x in X ] for (algo,iteravg) in iteravgs)
-
-    # iteravgpath = Dict(algo => cumsum(local_parm)./(1:length(local_parm)) for (algo,local_parm) in local_parms)
-
     # Univariate
     sublayers1 =  getsublayers(layers,1)
     components1 =  map(kv->kv[2],sublayers1.layerslist)
     isunivariate = (:univariate in components1)
     isallparms = (:allparms in components1)
     ishistogram = (:histogram in components1)
+    isiteravg = (:iteravg in components1)
+    
+    if (isiteravg)
+        iteravg_lengths = Dict(algo => epochlengths[algo]*iteravg_numepochs for algo in algos)
+        numiteravgs = Dict(algo => numstepss[algo] ÷ iteravg_lengths[algo] for algo in algos)
+        # iteravgranges = Dict(algo => [((2*i-1)*(numstepss[algo]÷ keepperiods[algo]÷100)+1):(min((2*i)*(numstepss[algo]÷ keepperiods[algo]÷100), (2*i-1)*(numstepss[algo]÷ keepperiods[algo]÷100)+1*epochlengths[algo])) for i in 1:50] for algo in algos)
+        iteravgranges = Dict(algo => [((i-1)*iteravg_lengths[algo]+1):(i*iteravg_lengths[algo]) for i in 1:numiteravgs[algo]] for algo in algos)
+        # print(iteravgranges)
+
+        iteravgs = Dict(algo => [sum(local_parm[range])/length(range) for range in iteravgranges[algo]] for (algo,local_parm) in local_parms)
+        # print(iteravgs)
+
+        dens2d_avg = Dict(algo => kde2d_gen(iteravg) for (algo,iteravg) in iteravgs)
+        Z_kde2d_avg = Dict(algo => [pdf(dens2d_avg[algo],x,y) for y in Y, x in X ] for (algo,iteravg) in iteravgs)
+    end
+    # iteravgpath = Dict(algo => cumsum(local_parm)./(1:length(local_parm)) for (algo,local_parm) in local_parms)
+
 
 
     if isunivariate
@@ -393,7 +404,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                         end
                         if :halfsandwichScaled in components
                             contour!(twinx(), yaxis=false, yticks=false, zaxis=false,zticks=false, X,Y,Z_halfsandwich_scaled, seriescolor=cgrad(:blues), linewidth=2 , colorbar = false, linestyle=:dash, levels=levels)
-                            plot!(1, color=:blues,linestyle=:dash,label="Basic SGD (expected)")
+                            plot!(1, color=:blues,linestyle=:dash,label="Basic SGD (expected) /m")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -403,7 +414,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                         end
                         if :sandwichScaled in components
                             contour!(twinx(), yaxis=false, yticks=false, zaxis=false,zticks=false, X,Y,Z_sandwich_scaled, seriescolor=cgrad(:reds), linewidth=2 , colorbar = false, linestyle=:dash, levels=levels)
-                            plot!(1, color=:reds, linestyle=:dash, label="J⁻¹I J⁻¹ Gaussian")
+                            plot!(1, color=:reds, linestyle=:dash, label="J⁻¹I J⁻¹/m Gaussian")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -413,7 +424,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                         end
                         if :jinvScaled in components
                             contour!(twinx(), yaxis=false, yticks=false, zaxis=false,zticks=false, X,Y,Z_Jinv_scaled, seriescolor=cgrad(:PuRd_9, rev=true), linewidth=2 , colorbar = false, linestyle=:dash, levels=levels)
-                            plot!(1, color=cgrad(:PuRd_9)[6], linestyle=:dash, label="J⁻¹ Gaussian")
+                            plot!(1, color=cgrad(:PuRd_9)[6], linestyle=:dash, label="J⁻¹/m Gaussian")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -423,7 +434,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                         end
                         if :mixtureScaled in components
                             contour!(twinx(), yaxis=false, yticks=false, zaxis=false,zticks=false, X,Y,Z_mixture_scaled, seriescolor=cgrad(:greens), linewidth=2 , colorbar = false, linestyle=:dash, levels=levels)
-                            plot!(1, color=:greens, linestyle=:dash, label="w J⁻¹ + (1-w) J⁻¹I J⁻¹")
+                            plot!(1, color=:greens, linestyle=:dash, label="w J⁻¹/m + (1-w) J⁻¹I J⁻¹/m")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -768,7 +779,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                         if ((:vanillaSGDPowOneSumOne in components))
                             # plot!(dens2d[:vanillaSGD], seriescolor=cgrad(:ice), linewidth=0.9, levels=levels)
                             contour!(twinx(), yaxis=false, yticks=false, zaxis=false,zticks=false, X,Y,Z_kde2d[:vanillaSGDPowOneSumOne], seriescolor=cgrad(:algae, rev=true), linewidth=0.9 , colorbar = false, levels=levels)
-                            plot!(1, color=cgrad(:ice)[50], label="Basic SGD, power=2/3")
+                            plot!(1, color=cgrad(:ice)[50], label="Basic SGD")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -815,7 +826,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                         if ((:vanillaSGDPowOne in components))
                             # plot!(dens2d[:vanillaSGD], seriescolor=cgrad(:ice), linewidth=0.9, levels=levels)
                             contour!(twinx(), yaxis=false, yticks=false, zaxis=false,zticks=false, X,Y,Z_kde2d_avg[:vanillaSGDPowOne], seriescolor=cgrad(:ice), linewidth=0.9 , colorbar = false, levels=levels)
-                            plot!(1, color=cgrad(:ice)[50], label="Basic SGD Iter. Avg., power=1/2")
+                            plot!(1, color=cgrad(:ice)[50], label="Basic SGD Iter. Avg.")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -859,7 +870,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                         if ((:vanillaSGDPowOneSumOne in components))
                             # plot!(dens2d[:vanillaSGD], seriescolor=cgrad(:ice), linewidth=0.9, levels=levels)
                             contour!(twinx(), yaxis=false, yticks=false, zaxis=false,zticks=false, X,Y,Z_kde2d_avg[:vanillaSGDPowOneSumOne], seriescolor=cgrad(:ice), linewidth=0.9 , colorbar = false, levels=levels)
-                            plot!(1, color=cgrad(:ice)[50], label="Basic SGD Iter. Avg., power=1/2")
+                            plot!(1, color=cgrad(:ice)[50], label="Basic SGD Iter. Avg.")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -905,7 +916,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :halfsandwichScaled in components
-                            plot!(X,Z_halfsandwich_scaled_1, seriescolor=:blue, linewidth=2 , linestyle=:dash,label="Basic SGD (expected)")
+                            plot!(X,Z_halfsandwich_scaled_1, seriescolor=:blue, linewidth=2 , linestyle=:dash,label="Basic SGD (expected)/m")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -914,10 +925,10 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :sandwichScaled in components
-                            plot!(X,Z_sandwich_scaled_1, seriescolor=:red, linewidth=2 , linestyle=:dash, label="J⁻¹I J⁻¹ Gaussian")
+                            plot!(X,Z_sandwich_scaled_1, seriescolor=:red, linewidth=2 , linestyle=:dash, label="J⁻¹I J⁻¹/m Gaussian")
                         end
                         if :jinvScaled in components
-                            plot!(X,Z_Jinv_scaled_1, seriescolor=:purple, linewidth=2 ,  linestyle=:dash, label="J⁻¹ Gaussian")
+                            plot!(X,Z_Jinv_scaled_1, seriescolor=:purple, linewidth=2 ,  linestyle=:dash, label="J⁻/m¹ Gaussian")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -926,7 +937,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :mixtureScaled in components
-                            plot!(X,Z_mixture_scaled_1, seriescolor=:green, linewidth=2 , linestyle=:dash, label="w J⁻¹ + (1-w) J⁻¹I J⁻¹")
+                            plot!(X,Z_mixture_scaled_1, seriescolor=:green, linewidth=2 , linestyle=:dash, label="w J⁻¹/m + (1-w) J⁻¹I J⁻¹/m")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -958,7 +969,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconSGD in components
-                            plot!(dens1d_1[:preconSGD], seriescolor=:crimson, linewidth=0.9, label="J⁻¹-Precon SGD")
+                            plot!(dens1d_1[:preconSGD], seriescolor=:orange, linewidth=0.9, label="J⁻¹-Precon SGD")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -967,7 +978,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconSGDdiag in components
-                            plot!(dens1d_1[:preconSGDdiag], seriescolor=:crimson, linewidth=0.9, label="diag(J)⁻¹-Precon SGD")
+                            plot!(dens1d_1[:preconSGDdiag], seriescolor=:orange, linewidth=0.9, label="diag(J)⁻¹-Precon SGD")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -976,7 +987,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconVSGD in components
-                            plot!(dens1d_1[:preconVSGD], seriescolor=:crimson, linewidth=0.9, label="I⁻¹-Precon SGD")
+                            plot!(dens1d_1[:preconVSGD], seriescolor=:orange, linewidth=0.9, label="I⁻¹-Precon SGD")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -985,7 +996,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconVSGDdiag in components
-                            plot!(dens1d_1[:preconVSGDdiag], seriescolor=:crimson, linewidth=0.9, label="diag(I)⁻¹-Precon SGD")
+                            plot!(dens1d_1[:preconVSGDdiag], seriescolor=:orange, linewidth=0.9, label="diag(I)⁻¹-Precon SGD")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1003,7 +1014,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconSGLD in components
-                            plot!(dens1d_1[:preconSGLD], seriescolor=:seagreen, linewidth=0.9,  label="J⁻¹-Precon SGLD")
+                            plot!(dens1d_1[:preconSGLD], seriescolor=:blue, linewidth=0.9,  label="J⁻¹-Precon SGLD")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1012,7 +1023,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconSGLDdiag in components
-                            plot!(dens1d_1[:preconSGLDdiag], seriescolor=:seagreen, linewidth=0.9,  label="diag(J)⁻¹-Precon SGLD")
+                            plot!(dens1d_1[:preconSGLDdiag], seriescolor=:blue, linewidth=0.9,  label="diag(J)⁻¹-Precon SGLD")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1120,10 +1131,10 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :sandwichScaled in components
-                            plot!(X,Z_sandwich_scaled_1, seriescolor=:red, linewidth=4 , label="J⁻¹I J⁻¹ Gaussian")
+                            plot!(X,Z_sandwich_scaled_1, seriescolor=:red, linewidth=4 , label="J⁻¹I J⁻¹/m Gaussian")
                         end
                         if :jinvScaled in components
-                            plot!(X,Z_Jinv_scaled_1, seriescolor=:purple, linewidth=4 ,  label="J⁻¹ Gaussian")
+                            plot!(X,Z_Jinv_scaled_1, seriescolor=:purple, linewidth=4 ,  label="J⁻¹/m Gaussian")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1132,7 +1143,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :mixtureScaled in components
-                            plot!(X,Z_mixture_scaled_1, seriescolor=:green, linewidth=4 , label="w J⁻¹ + (1-w) J⁻¹I J⁻¹")
+                            plot!(X,Z_mixture_scaled_1, seriescolor=:green, linewidth=4 , label="w J⁻¹/m + (1-w) J⁻¹I J⁻¹/m")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1155,7 +1166,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
 
                         # kdes of empirical distributions of sgld runs
                         if :vanillaSGD  in components
-                            histogram!(map(x->x[1], local_parms[:vanillaSGD]), alpha=0.5, color = :turquoise3, linecolor = :match,label="Basic SGD",normalize=true)
+                            histogram!(map(x->x[1], local_parms[:vanillaSGD]), alpha=0.25, color = :turquoise3, linecolor = :match,label="Basic SGD",normalize=true)
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1164,7 +1175,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconSGD in components
-                            histogram!(map(x->x[1], local_parms[:preconSGD]), alpha=0.5, color = :crimson,linecolor = :match,label="J⁻¹-Precon SGD",normalize=true)
+                            histogram!(map(x->x[1], local_parms[:preconSGD]), alpha=0.25, color = :orange,linecolor = :match,label="J⁻¹-Precon SGD",normalize=true)
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1173,7 +1184,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconSGDdiag in components
-                            histogram!(map(x->x[1], local_parms[:preconSGDdiag]), alpha=0.5, color = :crimson,linecolor = :match,label="diag(J)⁻¹-Precon SGD",normalize=true)
+                            histogram!(map(x->x[1], local_parms[:preconSGDdiag]), alpha=0.25, color = :orange,linecolor = :match,label="diag(J)⁻¹-Precon SGD",normalize=true)
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1182,7 +1193,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconVSGD in components
-                            histogram!(map(x->x[1], local_parms[:preconVSGD]), alpha=0.5, color = :crimson,linecolor = :match,label="I⁻¹-Precon SGD",normalize=true)
+                            histogram!(map(x->x[1], local_parms[:preconVSGD]), alpha=0.25, color = :orange,linecolor = :match,label="I⁻¹-Precon SGD",normalize=true)
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1191,7 +1202,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconVSGDdiag in components
-                            histogram!(map(x->x[1], local_parms[:preconVSGDdiag]), alpha=0.5, color = :crimson,linecolor = :match,label="diag(I)⁻¹-Precon SGD",normalize=true)
+                            histogram!(map(x->x[1], local_parms[:preconVSGDdiag]), alpha=0.25, color = :orange,linecolor = :match,label="diag(I)⁻¹-Precon SGD",normalize=true)
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1200,7 +1211,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :vanillaSGLD in components
-                            histogram!(map(x->x[1], local_parms[:vanillaSGLD]), alpha=0.5, color = :orange,linecolor = :match,label="Basic SGLD",normalize=true)
+                            histogram!(map(x->x[1], local_parms[:vanillaSGLD]), alpha=0.25, color = :orange,linecolor = :match,label="Basic SGLD",normalize=true)
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1209,7 +1220,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconSGLD in components
-                            histogram!(map(x->x[1], local_parms[:preconSGLD]), alpha=0.5, color = :seagreen,linecolor = :match,label="J⁻¹-Precon SGLD",normalize=true)
+                            histogram!(map(x->x[1], local_parms[:preconSGLD]), alpha=0.25, color = :blue,linecolor = :match,label="J⁻¹-Precon SGLD",normalize=true)
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1221,7 +1232,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconSGLDdiag in components
-                            histogram!(map(x->x[1], local_parms[:preconSGLDdiag]), alpha=0.5, color = :seagreen,linecolor = :match,label="diag(J)⁻¹-Precon SGLD",normalize=true)
+                            histogram!(map(x->x[1], local_parms[:preconSGLDdiag]), alpha=0.25, color = :blue,linecolor = :match,label="diag(J)⁻¹-Precon SGLD",normalize=true)
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1233,7 +1244,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :largeBatchVanillaSGLD in components
-                            histogram!(map(x->x[1], local_parms[:largeBatchVanillaSGLD]), alpha=0.5, color = :magenta,linecolor = :match,label="Large Sample SGLD",normalize=true)
+                            histogram!(map(x->x[1], local_parms[:largeBatchVanillaSGLD]), alpha=0.25, color = :magenta,linecolor = :match,label="Large Sample SGLD",normalize=true)
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1242,7 +1253,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :largeBatchPreconSGLD in components
-                            histogram!(map(x->x[1], local_parms[:largeBatchPreconSGLD]), alpha=0.5, color = :magenta,linecolor = :match,label="Large Sample Preconditioned SGLD",normalize=true)
+                            histogram!(map(x->x[1], local_parms[:largeBatchPreconSGLD]), alpha=0.25, color = :magenta,linecolor = :match,label="Large Sample Preconditioned SGLD",normalize=true)
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1251,7 +1262,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :vanillaSGLDdecreasing in components
-                            histogram!(map(x->x[1], local_parms[:vanillaSGLDdecreasing]), alpha=0.5, color = :magenta,linecolor = :match,label="SGLD with decreasing step sizes",normalize=true)
+                            histogram!(map(x->x[1], local_parms[:vanillaSGLDdecreasing]), alpha=0.25, color = :magenta,linecolor = :match,label="SGLD with decreasing step sizes",normalize=true)
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1359,7 +1370,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :halfsandwichScaled in components
-                            plot!(Xp[p],Z_halfsandwich_scaled[p], seriescolor=:blue, linewidth=2 , linestyle=:dash,label="Basic SGD (expected)")
+                            plot!(Xp[p],Z_halfsandwich_scaled[p], seriescolor=:blue, linewidth=2 , linestyle=:dash,label="Basic SGD (expected/m)")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1368,10 +1379,10 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :sandwichScaled in components
-                            plot!(Xp[p],Z_sandwich_scaled[p], seriescolor=:red, linewidth=2 , linestyle=:dash, label="J⁻¹I J⁻¹ Gaussian")
+                            plot!(Xp[p],Z_sandwich_scaled[p], seriescolor=:red, linewidth=2 , linestyle=:dash, label="J⁻¹I J⁻¹/m Gaussian")
                         end
                         if :jinvScaled in components
-                            plot!(Xp[p],Z_Jinv_scaled[p], seriescolor=:purple, linewidth=2 ,  linestyle=:dash, label="J⁻¹ Gaussian")
+                            plot!(Xp[p],Z_Jinv_scaled[p], seriescolor=:purple, linewidth=2 ,  linestyle=:dash, label="J⁻¹/m Gaussian")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1380,7 +1391,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :mixtureScaled in components
-                            plot!(Xp[p],Z_mixture_scaled[p], seriescolor=:green, linewidth=2 , linestyle=:dash, label="w J⁻¹ + (1-w) J⁻¹I J⁻¹")
+                            plot!(Xp[p],Z_mixture_scaled[p], seriescolor=:green, linewidth=2 , linestyle=:dash, label="w J⁻¹/m + (1-w) J⁻¹I J⁻¹/m")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1412,7 +1423,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconSGD in components
-                            plot!(dens1d[p][:preconSGD], seriescolor=:crimson, linewidth=0.9, label="J⁻¹-Precon SGD")
+                            plot!(dens1d[p][:preconSGD], seriescolor=:orange, linewidth=0.9, label="J⁻¹-Precon SGD")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1421,7 +1432,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconSGDdiag in components
-                            plot!(dens1d[p][:preconSGDdiag], seriescolor=:crimson, linewidth=0.9, label="diag(J)⁻¹-Precon SGD")
+                            plot!(dens1d[p][:preconSGDdiag], seriescolor=:orange, linewidth=0.9, label="diag(J)⁻¹-Precon SGD")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1430,7 +1441,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconVSGD in components
-                            plot!(dens1d[p][:preconVSGD], seriescolor=:crimson, linewidth=0.9, label="I⁻¹-Precon SGD")
+                            plot!(dens1d[p][:preconVSGD], seriescolor=:orange, linewidth=0.9, label="I⁻¹-Precon SGD")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1439,7 +1450,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconVSGDdiag in components
-                            plot!(dens1d[p][:preconVSGDdiag], seriescolor=:crimson, linewidth=0.9, label="diag(I)⁻¹-Precon SGD")
+                            plot!(dens1d[p][:preconVSGDdiag], seriescolor=:orange, linewidth=0.9, label="diag(I)⁻¹-Precon SGD")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1457,7 +1468,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconSGLD in components
-                            plot!(dens1d[p][:preconSGLD], seriescolor=:seagreen, linewidth=0.9,  label="J⁻¹-Precon SGLD")
+                            plot!(dens1d[p][:preconSGLD], seriescolor=:blue, linewidth=0.9,  label="J⁻¹-Precon SGLD")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1466,7 +1477,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconSGLDdiag in components
-                            plot!(dens1d[p][:preconSGLDdiag], seriescolor=:seagreen, linewidth=0.9,  label="diag(J)⁻¹-Precon SGLD")
+                            plot!(dens1d[p][:preconSGLDdiag], seriescolor=:blue, linewidth=0.9,  label="diag(J)⁻¹-Precon SGLD")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1540,7 +1551,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :halfsandwichScaled in components
-                            plot!(Xp[p],Z_halfsandwich_scaled[p], seriescolor=:blue, linewidth=4 , label="Basic SGD (expected)")
+                            plot!(Xp[p],Z_halfsandwich_scaled[p], seriescolor=:blue, linewidth=4 , label="Basic SGD (expected)/m")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1549,10 +1560,10 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :sandwichScaled in components
-                            plot!(Xp[p],Z_sandwich_scaled[p], seriescolor=:red, linewidth=4 , label="J⁻¹I J⁻¹ Gaussian")
+                            plot!(Xp[p],Z_sandwich_scaled[p], seriescolor=:red, linewidth=4 , label="J⁻¹I J⁻¹ Gaussian/m")
                         end
                         if :jinvScaled in components
-                            plot!(Xp[p],Z_Jinv_scaled[p], seriescolor=:purple, linewidth=4 ,  label="J⁻¹ Gaussian")
+                            plot!(Xp[p],Z_Jinv_scaled[p], seriescolor=:purple, linewidth=4 ,  label="J⁻¹/m Gaussian")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1561,7 +1572,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :mixtureScaled in components
-                            plot!(Xp[p],Z_mixture_scaled[p], seriescolor=:green, linewidth=4 , label="w J⁻¹ + (1-w) J⁻¹I J⁻¹")
+                            plot!(Xp[p],Z_mixture_scaled[p], seriescolor=:green, linewidth=4 , label="w J⁻¹/m + (1-w) J⁻¹I J⁻¹/m")
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1584,7 +1595,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
 
                         # kdes of empirical distributions of sgld runs
                         if :vanillaSGD  in components
-                            histogram!(map(x->x[p], local_parms[:vanillaSGD]), alpha=0.5, color = :turquoise3,linecolor = :match,label="Basic SGD",normalize=true)
+                            histogram!(map(x->x[p], local_parms[:vanillaSGD]), alpha=0.25, color = :turquoise3,linecolor = :match,label="Basic SGD",normalize=true)
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1593,7 +1604,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconSGD in components
-                            histogram!(map(x->x[p], local_parms[:preconSGD]), alpha=0.5, color = :crimson,linecolor = :match,label="J⁻¹-Precon SGD",normalize=true)
+                            histogram!(map(x->x[p], local_parms[:preconSGD]), alpha=0.25, color = :orange,linecolor = :match,label="J⁻¹-Precon SGD",normalize=true)
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1602,7 +1613,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconSGDdiag in components
-                            histogram!(map(x->x[p], local_parms[:preconSGDdiag]), alpha=0.5, color = :crimson,linecolor = :match,label="diag(J)⁻¹-Precon SGD",normalize=true)
+                            histogram!(map(x->x[p], local_parms[:preconSGDdiag]), alpha=0.25, color = :orange,linecolor = :match,label="diag(J)⁻¹-Precon SGD",normalize=true)
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1611,7 +1622,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconVSGD in components
-                            histogram!(map(x->x[p], local_parms[:preconVSGD]), alpha=0.5, color = :crimson,linecolor = :match,label="I⁻¹-Precon SGD",normalize=true)
+                            histogram!(map(x->x[p], local_parms[:preconVSGD]), alpha=0.25, color = :orange,linecolor = :match,label="I⁻¹-Precon SGD",normalize=true)
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1620,7 +1631,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconVSGDdiag in components
-                            histogram!(map(x->x[p], local_parms[:preconVSGDdiag]), alpha=0.5, color = :crimson,linecolor = :match,label="diag(I)⁻¹-Precon SGD",normalize=true)
+                            histogram!(map(x->x[p], local_parms[:preconVSGDdiag]), alpha=0.25, color = :orange,linecolor = :match,label="diag(I)⁻¹-Precon SGD",normalize=true)
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1629,7 +1640,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :vanillaSGLD in components
-                            histogram!(map(x->x[p], local_parms[:vanillaSGLD]), alpha=0.5, color = :orange,linecolor = :match,label="Basic SGLD",normalize=true)
+                            histogram!(map(x->x[p], local_parms[:vanillaSGLD]), alpha=0.25, color = :orange,linecolor = :match,label="Basic SGLD",normalize=true)
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1638,7 +1649,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconSGLD in components
-                            histogram!(map(x->x[p], local_parms[:preconSGLD]), alpha=0.5, color = :seagreen,linecolor = :match,label="J⁻¹-Precon SGLD",normalize=true)
+                            histogram!(map(x->x[p], local_parms[:preconSGLD]), alpha=0.25, color = :blue,linecolor = :match,label="J⁻¹-Precon SGLD",normalize=true)
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1647,7 +1658,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :preconSGLDdiag in components
-                            histogram!(map(x->x[p], local_parms[:preconSGLDdiag]), alpha=0.5, color = :seagreen,linecolor = :match,label="diag(J)⁻¹-Precon SGLD",normalize=true)
+                            histogram!(map(x->x[p], local_parms[:preconSGLDdiag]), alpha=0.25, color = :blue,linecolor = :match,label="diag(J)⁻¹-Precon SGLD",normalize=true)
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1657,7 +1668,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                         end
 
                         if :largeBatchVanillaSGLD in components
-                            histogram!(map(x->x[p], local_parms[:largeBatchVanillaSGLD]), alpha=0.5, color = :magenta, linecolor = :match,label="Large Sample SGLD",normalize=true)
+                            histogram!(map(x->x[p], local_parms[:largeBatchVanillaSGLD]), alpha=0.25, color = :magenta, linecolor = :match,label="Large Sample SGLD",normalize=true)
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1666,7 +1677,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :largeBatchPreconSGLD in components
-                            histogram!(map(x->x[p], local_parms[:largeBatchPreconSGLD]), alpha=0.5, color = :magenta, linecolor = :match,label="Large Sample Preconditioned SGLD",normalize=true)
+                            histogram!(map(x->x[p], local_parms[:largeBatchPreconSGLD]), alpha=0.25, color = :magenta, linecolor = :match,label="Large Sample Preconditioned SGLD",normalize=true)
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1675,7 +1686,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                             end
                         end
                         if :vanillaSGLDdecreasing in components
-                            histogram!(map(x->x[p], local_parms[:vanillaSGLDdecreasing]), alpha=0.5, color = :magenta, linecolor = :match,label="SGLD with decreasing step sizes",normalize=true)
+                            histogram!(map(x->x[p], local_parms[:vanillaSGLDdecreasing]), alpha=0.25, color = :magenta, linecolor = :match,label="SGLD with decreasing step sizes",normalize=true)
                             if (:noaxes in components)
                                 plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                             end
@@ -1683,7 +1694,7 @@ function sgldplot(fname, samplesize, algos, parms, trueparm, mleparm, Jinv, sqrt
                                 plot!(yticks=false,xticks=false)
                             end
                         end
-                        plot!(xlims=xlimvals_p[p],yticks=false)
+                        plot!(xlims=xlimvals_p[p],yticks=false,ylims=1.25.*ylims())
                         if (:noaxes in components)
                             plot!(yaxis=false,xaxis=false,yticks=false,xticks=false)
                         end
