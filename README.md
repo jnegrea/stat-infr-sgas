@@ -7,7 +7,7 @@
 | ------------- | ------------------ |
 | experiment 1  | experiments 1, 1b  |
 | experiment 2  | experiments 4, 4b  |
-| experiment 3  | experiment 6       |
+| experiment 3  | experiment 7       |
 
 
 ## Data
